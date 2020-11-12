@@ -1,33 +1,35 @@
 package server;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets;
 
 public class Main {
     public static void main(String[] args) throws IOException {
-        ServerSocket servSocket = new ServerSocket(22222);
+        final ServerSocketChannel serverChannel = ServerSocketChannel.open();
+        serverChannel.bind(new InetSocketAddress("localhost", 23334));
         while (true) {
-            try (Socket socket = servSocket.accept();
-                 PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-                 BufferedReader in = new BufferedReader(new
-                         InputStreamReader(socket.getInputStream()))) {
-                String input;
-                String resultString;
-                while ((input = in.readLine()) != null) {
-                    resultString = input.trim()
+            try (SocketChannel socketChannel = serverChannel.accept()) {
+                final ByteBuffer inputBuffer = ByteBuffer.allocate(2 << 10);
+                while (socketChannel.isConnected()) {
+                    int bytesCount = socketChannel.read(inputBuffer);
+                    if (bytesCount == -1) break;
+                    final String inputString = new String(inputBuffer.array(), 0, bytesCount,
+                            StandardCharsets.UTF_8);
+                    inputBuffer.clear();
+                    System.out.println("Получено сообщение от клиента: " + inputString);
+                    String resultString = inputString.trim()
                             .replaceAll(" ", "");
-                    out.println("Echo: " + resultString);
-                    if (input.equals("end")) {
-                        break;
-                    }
+                    socketChannel.write(ByteBuffer.wrap(("Эхо: " +
+                            resultString).getBytes(StandardCharsets.UTF_8)));
                 }
-            } catch (IOException ex) {
-                ex.printStackTrace(System.out);
+            } catch (IOException err) {
+                System.out.println(err.getMessage());
             }
         }
     }
 }
+
